@@ -63,6 +63,14 @@ pub const HttpBackend = struct {
         @compileError("HttpBackend.post must be implemented by concrete backend type");
     }
 
+    /// Send a DELETE request
+    pub fn delete(self: *@This(), url: []const u8, headers: []const Header) anyerror!Response {
+        _ = self;
+        _ = url;
+        _ = headers;
+        @compileError("HttpBackend.delete must be implemented by concrete backend type");
+    }
+
     /// Clean up resources
     pub fn deinit(self: *@This()) void {
         _ = self;
@@ -143,6 +151,26 @@ pub const StdHttpBackend = struct {
         return Response{
             .status_code = resp.status,
             .body = resp_body,
+            .headers = hdrs,
+        };
+    }
+
+    pub fn delete(self: *StdHttpBackend, url: []const u8, headers: []const Header) !Response {
+        var req = try self.client.request(.DELETE, url, .{
+            .headers = headers,
+        });
+        try req.send();
+        const resp = try req.wait();
+
+        const body = try self.readAllocResponseBody(resp);
+        errdefer self.allocator.free(body);
+
+        const hdrs = try self.allocator.dupe(Header, resp.headers.items);
+        errdefer self.allocator.free(hdrs);
+
+        return Response{
+            .status_code = resp.status,
+            .body = body,
             .headers = hdrs,
         };
     }
