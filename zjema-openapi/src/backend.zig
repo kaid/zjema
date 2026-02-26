@@ -12,12 +12,13 @@ pub const BackendResponse = struct {
     body: []const u8,
     headers: []const Header = &.{},
 
-    /// Free resources associated with the response
-    pub fn deinit(self: BackendResponse, allocator: std.mem.Allocator) void {
-        allocator.free(self.body);
-        if (self.headers.len > 0) {
-            allocator.free(@constCast(self.headers));
-        }
+    /// Free resources associated with the response.
+    /// Note: The body is typically owned by the backend implementation.
+    /// This method is called by the generated client after copying the body.
+    pub fn deinit(self: BackendResponse) void {
+        // Backend implementations are responsible for freeing their own resources
+        // The generated client copies the body immediately after receiving the response
+        _ = self;
     }
 };
 

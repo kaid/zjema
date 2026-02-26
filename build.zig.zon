@@ -3,8 +3,7 @@
     .version = "0.16.0-dev.2637+6a9510c0e",
     .dependencies = .{
         .izomorph = .{
-            .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz",
-            .hash = "izomorph-0.0.0--ctBEldHAQDTHaa2QCR7wIoldFsv98yUboWXEyEVH9Ru",
+            .path = "../izomorph",
         },
     },
     .paths = .{""},

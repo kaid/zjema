@@ -30,8 +30,7 @@ const MockBackend = struct {
         };
     }
 
-    pub fn post(self: *@This(), allocator: std.mem.Allocator, url: []const u8, body: []const u8, headers: []const api.backend.Header) !api.backend.BackendResponse {
-        _ = allocator;
+    pub fn post(self: *@This(), url: []const u8, body: []const u8, headers: []const api.backend.Header) !api.backend.BackendResponse {
         _ = url;
         _ = body;
         _ = headers;
@@ -59,7 +58,7 @@ pub fn main() void {
     defer client.deinit();
 
     // Example: get a pet
-    const pet = client.getPet("123") catch |err| {
+    const pet = client.getPet(allocator, "123") catch |err| {
         std.debug.print("Error getting pet: {s}\n", .{@errorName(err)});
         return;
     };

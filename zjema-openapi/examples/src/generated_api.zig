@@ -43,23 +43,27 @@ pub fn ApiClient(comptime Backend: type) type {
         pub fn deinit(self: *@This()) void {
             self.backend.deinit();
         }
-    pub fn getPet(self: *@This(), id: []const u8) !Pet {
-    const url = try std.fmt.allocPrint(self.allocator, "{s}/pets/{s}", .{ self.base_url, id});
-    defer self.allocator.free(url);
+    pub fn getPet(self: *@This(), allocator: std.mem.Allocator, id: []const u8) !Pet {
+    const url = try std.fmt.allocPrint(allocator, "{s}/pets/{s}", .{ self.base_url, id});
+    errdefer allocator.free(url);
     const resp = try self.backend.get(url, &.{});
-    defer resp.deinit(self.allocator);
+    const body_copy = try allocator.dupe(u8, resp.body);
+    errdefer allocator.free(body_copy);
+    resp.deinit();
     if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;
-    return try izo.json.decode(self.allocator, PetMapper, resp.body);
+    return try izo.json.decode(allocator, PetMapper, body_copy);
 }
-    pub fn createPet(self: *@This(), body: NewPet) !Pet {
-    const url = try std.fmt.allocPrint(self.allocator, "{s}/pets", .{ self.base_url});
-    defer self.allocator.free(url);
-    const json_body = try izo.json.encode(self.allocator, body, NewPetMapper, .{});
-    defer self.allocator.free(json_body);
-    const resp = try self.backend.post(self.allocator, url, json_body, &.{.{ .name = "Content-Type", .value = "application/json" }});
-    defer resp.deinit(self.allocator);
+    pub fn createPet(self: *@This(), allocator: std.mem.Allocator, body: NewPet) !Pet {
+    const url = try std.fmt.allocPrint(allocator, "{s}/pets", .{ self.base_url});
+    errdefer allocator.free(url);
+    const json_body = try izo.json.encode(allocator, body, NewPetMapper, .{});
+    errdefer allocator.free(json_body);
+    const resp = try self.backend.post(url, json_body, &.{.{ .name = "Content-Type", .value = "application/json" }});
+    const body_copy = try allocator.dupe(u8, resp.body);
+    errdefer allocator.free(body_copy);
+    resp.deinit();
     if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;
-    return try izo.json.decode(self.allocator, PetMapper, resp.body);
+    return try izo.json.decode(allocator, PetMapper, body_copy);
 }
     };
 }

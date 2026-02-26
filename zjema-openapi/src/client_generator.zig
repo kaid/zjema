@@ -96,15 +96,7 @@ pub const ClientGenerator = struct {
             // Supported HTTP methods
             const methods = [_][]const u8{ "get", "put", "post", "delete", "options", "head", "patch", "trace" };
             for (methods) |http_method| {
-                const op = if (std.mem.eql(u8, http_method, "get")) path_item.get
-                else if (std.mem.eql(u8, http_method, "put")) path_item.put
-                else if (std.mem.eql(u8, http_method, "post")) path_item.post
-                else if (std.mem.eql(u8, http_method, "delete")) path_item.delete
-                else if (std.mem.eql(u8, http_method, "options")) path_item.options
-                else if (std.mem.eql(u8, http_method, "head")) path_item.head
-                else if (std.mem.eql(u8, http_method, "patch")) path_item.patch
-                else if (std.mem.eql(u8, http_method, "trace")) path_item.trace
-                else null;
+                const op = if (std.mem.eql(u8, http_method, "get")) path_item.get else if (std.mem.eql(u8, http_method, "put")) path_item.put else if (std.mem.eql(u8, http_method, "post")) path_item.post else if (std.mem.eql(u8, http_method, "delete")) path_item.delete else if (std.mem.eql(u8, http_method, "options")) path_item.options else if (std.mem.eql(u8, http_method, "head")) path_item.head else if (std.mem.eql(u8, http_method, "patch")) path_item.patch else if (std.mem.eql(u8, http_method, "trace")) path_item.trace else null;
                 if (op) |operation| {
                     try generateMethod(&out, self.allocator, path_str, http_method, operation, type_config, options);
                 }
@@ -148,7 +140,7 @@ fn generateMethod(
     // Start method signature
     try out.appendSlice(allocator, "    pub fn ");
     try out.appendSlice(allocator, method_name);
-    try out.appendSlice(allocator, "(self: *@This()");
+    try out.appendSlice(allocator, "(self: *@This(), allocator: std.mem.Allocator");
 
     // Request body handling (JSON only)
     var has_json_body = false;
@@ -189,7 +181,7 @@ fn generateMethod(
     if (is_sse) {
         // Streaming method returns whatever the backend's getStream returns (Stream)
         try out.appendSlice(allocator, ") anytype! {\n");
-        try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(self.allocator, \"");
+        try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(allocator, \"");
         try escapeString(allocator, out, full_fmt);
         try out.appendSlice(allocator, "\", .{self.base_url");
         // Append path parameters
@@ -198,14 +190,14 @@ fn generateMethod(
             if (path[i] == '{') {
                 const end = std.mem.indexOfScalarPos(u8, path, i, '}') orelse break;
                 try out.appendSlice(allocator, ", ");
-                try out.appendSlice(allocator, path[i+1..end]);
+                try out.appendSlice(allocator, path[i + 1 .. end]);
                 i = end + 1;
             } else {
                 i += 1;
             }
         }
         try out.appendSlice(allocator, "});\n");
-        try out.appendSlice(allocator, "    defer self.allocator.free(url);\n");
+        try out.appendSlice(allocator, "    errdefer allocator.free(url);\n");
         try out.appendSlice(allocator, "    return try self.backend.getStream(url, &.{});\n");
         try out.appendSlice(allocator, "}\n");
         // Cleanup: body_type_owned will be freed by caller (generateMethod) at end
@@ -224,7 +216,7 @@ fn generateMethod(
     }
 
     // Build URL
-    try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(self.allocator, \"");
+    try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(allocator, \"");
     try escapeString(allocator, out, full_fmt);
     try out.appendSlice(allocator, "\", .{ self.base_url");
     // Append path parameters
@@ -233,32 +225,36 @@ fn generateMethod(
         if (path[i] == '{') {
             const end = std.mem.indexOfScalarPos(u8, path, i, '}') orelse break;
             try out.appendSlice(allocator, ", ");
-            try out.appendSlice(allocator, path[i+1..end]);
+            try out.appendSlice(allocator, path[i + 1 .. end]);
             i = end + 1;
         } else {
             i += 1;
         }
     }
     try out.appendSlice(allocator, "});\n");
-    try out.appendSlice(allocator, "    defer self.allocator.free(url);\n");
+    try out.appendSlice(allocator, "    errdefer allocator.free(url);\n");
 
     // Encode request body if present
     if (has_json_body) {
-        try out.appendSlice(allocator, "    const json_body = try izo.json.encode(self.allocator, body, ");
+        try out.appendSlice(allocator, "    const json_body = try izo.json.encode(allocator, body, ");
         try out.appendSlice(allocator, body_type_owned);
         try out.appendSlice(allocator, "Mapper, .{});\n");
-        try out.appendSlice(allocator, "    defer self.allocator.free(json_body);\n");
+        try out.appendSlice(allocator, "    errdefer allocator.free(json_body);\n");
     }
 
     // Backend call - simple HTTP methods
     try out.appendSlice(allocator, "    const resp = try self.backend.");
     try out.appendSlice(allocator, http_method);
     if (has_json_body) {
-        try out.appendSlice(allocator, "(self.allocator, url, json_body, &.{.{ .name = \"Content-Type\", .value = \"application/json\" }});\n");
+        try out.appendSlice(allocator, "(url, json_body, &.{.{ .name = \"Content-Type\", .value = \"application/json\" }});\n");
     } else {
         try out.appendSlice(allocator, "(url, &.{});\n");
     }
-    try out.appendSlice(allocator, "    defer resp.deinit(self.allocator);\n");
+
+    // Copy response body to caller's allocator, then free backend response
+    try out.appendSlice(allocator, "    const body_copy = try allocator.dupe(u8, resp.body);\n");
+    try out.appendSlice(allocator, "    errdefer allocator.free(body_copy);\n");
+    try out.appendSlice(allocator, "    resp.deinit();\n");
 
     // Status check (2xx)
     try out.appendSlice(allocator, "    if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;\n");
@@ -267,9 +263,9 @@ fn generateMethod(
     if (operation.responses.get("200")) |resp| {
         if (resp.content.get("application/json") != null) {
             if (return_type_owned.len > 0) {
-                try out.appendSlice(allocator, "    return try izo.json.decode(self.allocator, ");
+                try out.appendSlice(allocator, "    return try izo.json.decode(allocator, ");
                 try out.appendSlice(allocator, return_type_owned);
-                try out.appendSlice(allocator, "Mapper, resp.body);\n");
+                try out.appendSlice(allocator, "Mapper, body_copy);\n");
             }
         }
     }
@@ -294,7 +290,7 @@ fn getParamTypeString(
     if (schema == .ref) {
         const ref = schema.ref;
         const last_slash = std.mem.lastIndexOf(u8, ref, "/");
-        const name = if (last_slash) |idx| ref[idx+1..] else ref;
+        const name = if (last_slash) |idx| ref[idx + 1 ..] else ref;
         return try allocator.dupe(u8, name);
     } else if (schema == .object) {
         const obj = schema.object;
@@ -331,13 +327,13 @@ fn escapeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), s: []cons
         switch (s[i]) {
             '\\', '\"' => {
                 try out.appendSlice(allocator, "\\");
-                try out.appendSlice(allocator, s[i..i+1]);
+                try out.appendSlice(allocator, s[i .. i + 1]);
             },
             '\n' => {
                 try out.appendSlice(allocator, "\\n");
             },
             else => {
-                try out.appendSlice(allocator, s[i..i+1]);
+                try out.appendSlice(allocator, s[i .. i + 1]);
             },
         }
     }
