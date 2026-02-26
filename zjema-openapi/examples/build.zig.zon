@@ -1,0 +1,16 @@
+.{
+    .name = .petstore_example,
+    .version = "0.1.0",
+    .fingerprint = 0xc937c38033ad2d8c,
+    .minimum_zig_version = "0.16.0-dev",
+    .dependencies = .{
+        .zjema_openapi = .{ .path = "../../zjema-openapi" },
+        .zjema = .{ .path = "../../zjema" },
+        .zjema_openapi_http = .{ .path = "../../zjema-openapi-http" },
+    },
+    .paths = .{
+        "build.zig",
+        "src",
+        "spec.json",
+    },
+}

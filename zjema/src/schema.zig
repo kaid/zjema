@@ -2,16 +2,46 @@ const std = @import("std");
 const json = std.json;
 
 pub const JsonSchema = struct {
+    /// $ref string if this schema is a reference
+    ref: ?[]const u8 = null,
+
+    /// JSON Schema type ("string", "integer", "object", "array", etc.)
     type: ?[]const u8 = null,
+
+    /// Object properties (for type "object")
     properties: ?[]const Property = null,
+
+    /// Required property names (for type "object")
     required: ?[]const []const u8 = null,
+
+    /// Array item schema (for type "array")
     items: ?*const JsonSchema = null,
+
+    /// Enum values (for strings with fixed values)
     @"enum": ?[]const []const u8 = null,
+
+    /// Union of schemas (anyOf)
+    anyOf: ?[]const JsonSchema = null,
+
+    /// Union of schemas (oneOf)
     oneOf: ?[]const JsonSchema = null,
+
+    /// All schemas must match (allOf)
+    allOf: ?[]const JsonSchema = null,
+
+    /// Format hint (e.g., "date-time", "email")
+    format: ?[]const u8 = null,
+
+    /// Description text
+    description: ?[]const u8 = null,
+
+    /// Nullable flag (JSON Schema draft-04+)
+    nullable: bool = false,
 
     pub const Property = struct {
         name: []const u8,
         schema: JsonSchema,
+        description: ?[]const u8 = null,
     };
 
     pub fn jsonStringify(self: JsonSchema, jws: *std.json.Stringify) !void {
@@ -20,11 +50,7 @@ pub const JsonSchema = struct {
 };
 
 /// Generate JSON Schema struct from a Zig type at comptime
-pub fn generate(comptime T: type) JsonSchema {
-    return comptime generateSchema(T);
-}
-
-fn generateSchema(comptime T: type) JsonSchema {
+pub fn toSchema(comptime T: type) JsonSchema {
     // Special case: json.Value accepts any JSON value
     if (T == json.Value) {
         return JsonSchema{};
@@ -34,20 +60,20 @@ fn generateSchema(comptime T: type) JsonSchema {
 
     return switch (info) {
         .@"struct" => generateObjectSchema(T),
-        .optional => |opt| generateSchema(opt.child),
+        .optional => |opt| toSchema(opt.child),
         .pointer => |ptr| switch (ptr.size) {
             .slice => if (ptr.child == u8)
                 JsonSchema{ .type = "string" }
             else
                 JsonSchema{
                     .type = "array",
-                    .items = &generateSchema(ptr.child),
+                    .items = &toSchema(ptr.child),
                 },
             else => @compileError("Unsupported pointer type for schema generation"),
         },
         .array => |arr| JsonSchema{
             .type = "array",
-            .items = &generateSchema(arr.child),
+            .items = &toSchema(arr.child),
         },
         .int => JsonSchema{ .type = "integer" },
         .float => JsonSchema{ .type = "number" },
@@ -69,7 +95,7 @@ fn generateObjectSchema(comptime T: type) JsonSchema {
     comptime var required: []const []const u8 = &[_][]const u8{};
 
     inline for (fields) |field| {
-        const field_schema = generateSchema(field.type);
+        const field_schema = comptime toSchema(field.type);
         props = props ++ [_]JsonSchema.Property{.{ .name = field.name, .schema = field_schema }};
 
         // Required array (non-optional fields without defaults)
@@ -114,7 +140,7 @@ fn generateUnionSchema(comptime T: type) JsonSchema {
     comptime var variants: []const JsonSchema = &[_]JsonSchema{};
 
     inline for (info.fields) |field| {
-        const variant_schema = generateSchema(field.type);
+        const variant_schema = toSchema(field.type);
         variants = variants ++ [_]JsonSchema{variant_schema};
     }
 
@@ -132,9 +158,24 @@ fn generateAnyValueSchema() JsonSchema {
 
 fn writeJsonSchema(jws: *std.json.Stringify, schema: JsonSchema) !void {
     try jws.beginObject();
+    if (schema.ref) |ref| {
+        try jws.objectField("$ref");
+        try jws.write(ref);
+    }
+
     if (schema.type) |t| {
         try jws.objectField("type");
         try jws.write(t);
+    }
+
+    if (schema.format) |f| {
+        try jws.objectField("format");
+        try jws.write(f);
+    }
+
+    if (schema.description) |desc| {
+        try jws.objectField("description");
+        try jws.write(desc);
     }
 
     if (schema.properties) |props| {
@@ -171,11 +212,34 @@ fn writeJsonSchema(jws: *std.json.Stringify, schema: JsonSchema) !void {
         try jws.endArray();
     }
 
+    if (schema.anyOf) |variants| {
+        try jws.objectField("anyOf");
+        try jws.beginArray();
+        for (variants) |variant| {
+            try writeJsonSchema(jws, variant);
+        }
+        try jws.endArray();
+    }
+
+    if (schema.allOf) |variants| {
+        try jws.objectField("allOf");
+        try jws.beginArray();
+        for (variants) |variant| {
+            try writeJsonSchema(jws, variant);
+        }
+        try jws.endArray();
+    }
+
+    if (schema.nullable) {
+        try jws.objectField("nullable");
+        try jws.write(true);
+    }
+
     try jws.endObject();
 }
 
 fn expectSchema(comptime T: type, expected: []const u8) !void {
-    const js = generate(T);
+    const js = toSchema(T);
     var aw = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer aw.deinit();
     var jws: std.json.Stringify = .{ .writer = &aw.writer };
@@ -247,7 +311,7 @@ test "generate schema for struct with json.Value" {
 }
 
 test "generate schema for json.Value field" {
-    const js = generate(json.Value);
+    const js = toSchema(json.Value);
     var aw = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer aw.deinit();
     var jws: std.json.Stringify = .{ .writer = &aw.writer };

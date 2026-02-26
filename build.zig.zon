@@ -1,7 +1,0 @@
-.{
-    .name = .zjema,
-    .version = "0.0.1",
-    .minimum_zig_version = "0.16.0-dev.2637+6a9510c0e",
-    .paths = .{""},
-    .fingerprint = 0x852155fbac9665cc,
-}

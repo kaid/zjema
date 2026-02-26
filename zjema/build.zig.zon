@@ -1,0 +1,12 @@
+.{
+    .name = .zjema,
+    .version = "0.1.0",
+    .fingerprint = 0x852155fbf686a951,
+    .minimum_zig_version = "0.16.0-dev",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

@@ -1,0 +1,16 @@
+.{
+    .name = .zjema_openapi,
+    .version = "0.1.0",
+    .fingerprint = 0x218d51a3bda12a60,
+    .minimum_zig_version = "0.16.0-dev",
+    .dependencies = .{
+        .zjema = .{
+            .path = "../zjema",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
