@@ -38,11 +38,7 @@ pub fn build(b: *std.Build) void {
 
     // Import required dependencies for generated_api
     exe.root_module.addImport("zjema_openapi", zjema_openapi_mod);
-    exe.root_module.addImport("izomorph", b.createModule(.{
-        .root_source_file = b.path("../../../izomorph/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    }));
+    exe.root_module.addImport("izomorph", b.dependency("izomorph", .{}).module("izomorph"));
 
     // Optionally use StdHttpBackend from zjema-openapi-http
     // exe.root_module.addImport("http", b.dependency("zjema_openapi_http", .{}).module("zjema_openapi_http"));

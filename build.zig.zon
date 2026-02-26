@@ -1,0 +1,12 @@
+.{
+    .name = .zjema,
+    .version = "0.16.0-dev.2637+6a9510c0e",
+    .dependencies = .{
+        .izomorph = .{
+            .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz",
+            .hash = "izomorph-0.0.0--ctBEldHAQDTHaa2QCR7wIoldFsv98yUboWXEyEVH9Ru",
+        },
+    },
+    .paths = .{""},
+    .fingerprint = 0x852155fb8629f3f2,
+}

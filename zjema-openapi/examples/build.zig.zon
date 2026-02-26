@@ -7,6 +7,10 @@
         .zjema_openapi = .{ .path = "../../zjema-openapi" },
         .zjema = .{ .path = "../../zjema" },
         .zjema_openapi_http = .{ .path = "../../zjema-openapi-http" },
+        .izomorph = .{
+            .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz",
+            .hash = "izomorph-0.0.0--ctBEldHAQDTHaa2QCR7wIoldFsv98yUboWXEyEVH9Ru",
+        },
     },
     .paths = .{
         "build.zig",

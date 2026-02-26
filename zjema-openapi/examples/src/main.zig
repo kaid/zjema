@@ -21,10 +21,12 @@ const MockBackend = struct {
             \\{ "id": "123", "name": "Fluffy", "tag": "cute" }
         ;
         const body = try self.allocator.dupe(u8, body_str);
+        errdefer self.allocator.free(body);
+        const hdrs = try self.allocator.alloc(api.backend.Header, 0);
         return api.backend.BackendResponse{
             .status_code = 200,
             .body = body,
-            .headers = &.{},
+            .headers = hdrs,
         };
     }
 
@@ -37,10 +39,12 @@ const MockBackend = struct {
             \\{ "id": "new-123", "name": "New Pet" }
         ;
         const new_body = try self.allocator.dupe(u8, body_str);
+        errdefer self.allocator.free(new_body);
+        const hdrs = try self.allocator.alloc(api.backend.Header, 0);
         return api.backend.BackendResponse{
             .status_code = 200,
             .body = new_body,
-            .headers = &.{},
+            .headers = hdrs,
         };
     }
 };
