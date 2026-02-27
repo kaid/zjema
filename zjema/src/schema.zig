@@ -1,41 +1,19 @@
 const std = @import("std");
 const json = std.json;
+const izo = @import("izomorph");
 
 pub const JsonSchema = struct {
-    /// $ref string if this schema is a reference
     ref: ?[]const u8 = null,
-
-    /// JSON Schema type ("string", "integer", "object", "array", etc.)
     type: ?[]const u8 = null,
-
-    /// Object properties (for type "object")
     properties: ?[]const Property = null,
-
-    /// Required property names (for type "object")
     required: ?[]const []const u8 = null,
-
-    /// Array item schema (for type "array")
     items: ?*const JsonSchema = null,
-
-    /// Enum values (for strings with fixed values)
     @"enum": ?[]const []const u8 = null,
-
-    /// Union of schemas (anyOf)
     anyOf: ?[]const JsonSchema = null,
-
-    /// Union of schemas (oneOf)
     oneOf: ?[]const JsonSchema = null,
-
-    /// All schemas must match (allOf)
     allOf: ?[]const JsonSchema = null,
-
-    /// Format hint (e.g., "date-time", "email")
     format: ?[]const u8 = null,
-
-    /// Description text
     description: ?[]const u8 = null,
-
-    /// Nullable flag (JSON Schema draft-04+)
     nullable: bool = false,
 
     pub const Property = struct {
@@ -44,14 +22,39 @@ pub const JsonSchema = struct {
         description: ?[]const u8 = null,
     };
 
-    pub fn jsonStringify(self: JsonSchema, jws: *std.json.Stringify) !void {
-        try writeJsonSchema(jws, self);
+    /// Serialize to JSON using izomorph
+    pub fn toJson(self: JsonSchema, writer: anytype) !void {
+        try izo.json.encodeToWriter(writer, self, JsonSchemaMapper, .{});
+    }
+
+    /// Serialize to JSON string (allocating)
+    pub fn toJsonAlloc(self: JsonSchema, allocator: std.mem.Allocator) ![]const u8 {
+        return try izo.json.encode(allocator, self, JsonSchemaMapper, .{});
     }
 };
 
+// Mappers for izomorph serialization
+pub const PropertyMapper = izo.Mapper(JsonSchema.Property, .{
+    .schema = .{ .alias = "schema" },
+});
+
+pub const JsonSchemaMapper = izo.Mapper(JsonSchema, .{
+    .ref = .{ .alias = "$ref", .omit_null = true },
+    .type = .{ .omit_null = true },
+    .properties = .{ .omit_null = true },
+    .required = .{ .omit_null = true },
+    .items = .{ .omit_null = true },
+    .@"enum" = .{ .alias = "enum", .omit_null = true },
+    .anyOf = .{ .omit_null = true },
+    .oneOf = .{ .omit_null = true },
+    .allOf = .{ .omit_null = true },
+    .format = .{ .omit_null = true },
+    .description = .{ .omit_null = true },
+    .nullable = .{ .omit_default = true }, // omit if false (default)
+});
+
 /// Generate JSON Schema struct from a Zig type at comptime
 pub fn toSchema(comptime T: type) JsonSchema {
-    // Special case: json.Value accepts any JSON value
     if (T == json.Value) {
         return JsonSchema{};
     }
@@ -98,7 +101,6 @@ fn generateObjectSchema(comptime T: type) JsonSchema {
         const field_schema = comptime toSchema(field.type);
         props = props ++ [_]JsonSchema.Property{.{ .name = field.name, .schema = field_schema }};
 
-        // Required array (non-optional fields without defaults)
         const is_optional = @typeInfo(field.type) == .optional;
         const has_default = field.default_value_ptr != null;
 
@@ -132,7 +134,6 @@ fn generateEnumSchema(comptime T: type) JsonSchema {
 fn generateUnionSchema(comptime T: type) JsonSchema {
     const info = @typeInfo(T).@"union";
 
-    // Only support tagged unions (union(enum))
     if (info.tag_type == null) {
         @compileError("Unsupported untagged union for schema generation: " ++ @typeName(T));
     }
@@ -156,97 +157,11 @@ fn generateAnyValueSchema() JsonSchema {
 
 // ==================== Tests ====================
 
-fn writeJsonSchema(jws: *std.json.Stringify, schema: JsonSchema) !void {
-    try jws.beginObject();
-    if (schema.ref) |ref| {
-        try jws.objectField("$ref");
-        try jws.write(ref);
-    }
-
-    if (schema.type) |t| {
-        try jws.objectField("type");
-        try jws.write(t);
-    }
-
-    if (schema.format) |f| {
-        try jws.objectField("format");
-        try jws.write(f);
-    }
-
-    if (schema.description) |desc| {
-        try jws.objectField("description");
-        try jws.write(desc);
-    }
-
-    if (schema.properties) |props| {
-        try jws.objectField("properties");
-        try jws.beginObject();
-        for (props) |prop| {
-            try jws.objectField(prop.name);
-            try writeJsonSchema(jws, prop.schema);
-        }
-        try jws.endObject();
-    }
-
-    if (schema.required) |req| {
-        try jws.objectField("required");
-        try jws.write(req);
-    }
-
-    if (schema.items) |items| {
-        try jws.objectField("items");
-        try writeJsonSchema(jws, items.*);
-    }
-
-    if (schema.@"enum") |enum_vals| {
-        try jws.objectField("enum");
-        try jws.write(enum_vals);
-    }
-
-    if (schema.oneOf) |variants| {
-        try jws.objectField("oneOf");
-        try jws.beginArray();
-        for (variants) |variant| {
-            try writeJsonSchema(jws, variant);
-        }
-        try jws.endArray();
-    }
-
-    if (schema.anyOf) |variants| {
-        try jws.objectField("anyOf");
-        try jws.beginArray();
-        for (variants) |variant| {
-            try writeJsonSchema(jws, variant);
-        }
-        try jws.endArray();
-    }
-
-    if (schema.allOf) |variants| {
-        try jws.objectField("allOf");
-        try jws.beginArray();
-        for (variants) |variant| {
-            try writeJsonSchema(jws, variant);
-        }
-        try jws.endArray();
-    }
-
-    if (schema.nullable) {
-        try jws.objectField("nullable");
-        try jws.write(true);
-    }
-
-    try jws.endObject();
-}
-
 fn expectSchema(comptime T: type, expected: []const u8) !void {
     const js = toSchema(T);
-    var aw = std.Io.Writer.Allocating.init(std.testing.allocator);
-    defer aw.deinit();
-    var jws: std.json.Stringify = .{ .writer = &aw.writer };
-
-    try writeJsonSchema(&jws, js);
-    try aw.writer.flush();
-    try std.testing.expectEqualStrings(expected, aw.written());
+    const result = try js.toJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings(expected, result);
 }
 
 test "generate schema for simple struct" {
@@ -312,13 +227,9 @@ test "generate schema for struct with json.Value" {
 
 test "generate schema for json.Value field" {
     const js = toSchema(json.Value);
-    var aw = std.Io.Writer.Allocating.init(std.testing.allocator);
-    defer aw.deinit();
-    var jws: std.json.Stringify = .{ .writer = &aw.writer };
-
-    try writeJsonSchema(&jws, js);
-    try aw.writer.flush();
-    try std.testing.expectEqualStrings("{}", aw.written());
+    const result = try js.toJsonAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("{}", result);
 }
 
 test "generate schema for union type" {

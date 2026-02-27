@@ -3,7 +3,12 @@
     .version = "0.1.0",
     .fingerprint = 0x852155fbf686a951,
     .minimum_zig_version = "0.16.0-dev",
-    .dependencies = .{},
+    .dependencies = .{
+        .izomorph = .{
+            .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz",
+            .hash = "izomorph-0.0.0--ctBEhx0AQBBU8BiLLTg7faGPQ7EGqOybz6h2vdJ_GFE",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

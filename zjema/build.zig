@@ -4,11 +4,20 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Dependencies
+    const izomorph_dep = b.dependency("izomorph", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     // Core module
     const zjema_mod = b.addModule("zjema", .{
         .root_source_file = b.path("src/zjema.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "izomorph", .module = izomorph_dep.module("izomorph") },
+        },
     });
 
     const lib = b.addLibrary(.{

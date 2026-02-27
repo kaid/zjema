@@ -5,114 +5,28 @@ const sch_mod = @import("schema.zig");
 pub const SerializeOptions = struct {
     /// Pretty print with indentation (default: false)
     pretty: bool = false,
-    /// Indent string for pretty printing (default: "  ")
-    indent: []const u8 = "  ",
 };
 
-/// Write JsonSchema to any writer
+/// Write JsonSchema to any writer using izomorph
 pub fn write(sch: sch_mod.JsonSchema, writer: anytype, options: SerializeOptions) !void {
-    var jws = std.json.Stringify{ .writer = writer };
-    try writeJsonSchema(&jws, sch, options);
-}
-
-fn writeJsonSchema(jws: *std.json.Stringify, sch: sch_mod.JsonSchema, options: SerializeOptions) !void {
-    try jws.beginObject();
-
-    if (sch.ref) |ref| {
-        try jws.objectField("$ref");
-        try jws.write(ref);
-    }
-
-    if (sch.type) |t| {
-        try jws.objectField("type");
-        try jws.write(t);
-    }
-
-    if (sch.format) |f| {
-        try jws.objectField("format");
-        try jws.write(f);
-    }
-
-    if (sch.description) |desc| {
-        try jws.objectField("description");
-        try jws.write(desc);
-    }
-
-    if (sch.properties) |props| {
-        try jws.objectField("properties");
-        try jws.beginObject();
-        for (props) |prop| {
-            try jws.objectField(prop.name);
-            try writeJsonSchema(jws, prop.schema, options);
-        }
-        try jws.endObject();
-    }
-
-    if (sch.required) |req| {
-        try jws.objectField("required");
-        try jws.write(req);
-    }
-
-    if (sch.items) |items| {
-        try jws.objectField("items");
-        try writeJsonSchema(jws, items.*, options);
-    }
-
-    if (sch.@"enum") |enum_vals| {
-        try jws.objectField("enum");
-        try jws.write(enum_vals);
-    }
-
-    if (sch.oneOf) |variants| {
-        try jws.objectField("oneOf");
-        try jws.beginArray();
-        for (variants) |variant| {
-            try writeJsonSchema(jws, variant, options);
-        }
-        try jws.endArray();
-    }
-
-    if (sch.anyOf) |variants| {
-        try jws.objectField("anyOf");
-        try jws.beginArray();
-        for (variants) |variant| {
-            try writeJsonSchema(jws, variant, options);
-        }
-        try jws.endArray();
-    }
-
-    if (sch.allOf) |variants| {
-        try jws.objectField("allOf");
-        try jws.beginArray();
-        for (variants) |variant| {
-            try writeJsonSchema(jws, variant, options);
-        }
-        try jws.endArray();
-    }
-
-    if (sch.nullable) {
-        try jws.objectField("nullable");
-        try jws.write(true);
-    }
-
-    try jws.endObject();
+    const encode_options: @import("izomorph").json.EncodeOptions = .{
+        .pretty = options.pretty,
+    };
+    try @import("izomorph").json.encodeToWriter(writer, sch, sch_mod.JsonSchemaMapper, encode_options);
 }
 
 /// Convert schema to string using allocator (returns allocated string)
 pub fn stringify(allocator: std.mem.Allocator, sch: sch_mod.JsonSchema, options: SerializeOptions) ![]u8 {
-    var aw = std.Io.Writer.Allocating.init(allocator);
-    defer aw.deinit();
-    var jws = std.json.Stringify{ .writer = &aw.writer };
-    try writeJsonSchema(&jws, sch, options);
-    try aw.writer.flush();
-    return aw.toOwnedSlice();
+    const encode_options: @import("izomorph").json.EncodeOptions = .{
+        .pretty = options.pretty,
+    };
+    return try @import("izomorph").json.encode(allocator, sch, sch_mod.JsonSchemaMapper, encode_options);
 }
 
 /// Print schema to stdout (convenience)
 pub fn print(sch: sch_mod.JsonSchema, options: SerializeOptions) !void {
-    var stdout_writer = std.io.getStdOut().writer();
-    var jws = std.json.Stringify{ .writer = &stdout_writer };
-    try writeJsonSchema(&jws, sch, options);
+    const stdout_writer = std.io.getStdOut().writer();
+    try write(sch, stdout_writer, options);
     _ = try stdout_writer.writeByte('\n');
 }
 
@@ -187,4 +101,22 @@ test "serialize schema with format and nullable" {
 
     try std.testing.expect(std.mem.indexOf(u8, json_str, "\"format\":\"date-time\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, json_str, "\"nullable\":true") != null);
+}
+
+test "serialize schema with pretty printing" {
+    const allocator = std.testing.allocator;
+
+    const sch = sch_mod.JsonSchema{
+        .type = "object",
+        .properties = &[_]sch_mod.JsonSchema.Property{
+            .{ .name = "name", .schema = .{ .type = "string" } },
+        },
+    };
+
+    const json_str = try stringify(allocator, sch, .{ .pretty = true });
+    defer allocator.free(json_str);
+
+    // Pretty printed should contain newlines and indentation
+    try std.testing.expect(std.mem.indexOf(u8, json_str, "\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json_str, "  ") != null);
 }
