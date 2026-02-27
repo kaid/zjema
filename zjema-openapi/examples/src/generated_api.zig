@@ -32,38 +32,32 @@ pub const ApiErrorMapper = izo.Mapper(ApiError, .{});
 // ============= API CLIENT =============
 pub fn ApiClient(comptime Backend: type) type {
     return struct {
-        allocator: std.mem.Allocator,
         base_url: []const u8,
         backend: Backend,
 
-        pub fn init(allocator: std.mem.Allocator, base_url: []const u8, _backend: Backend) @This() {
-            return .{ .allocator = allocator, .base_url = base_url, .backend = _backend };
+        pub fn init(base_url: []const u8, _backend: Backend) @This() {
+            return .{ .base_url = base_url, .backend = _backend };
         }
 
         pub fn deinit(self: *@This()) void {
             self.backend.deinit();
         }
-    pub fn getPet(self: *@This(), allocator: std.mem.Allocator, id: []const u8) !Pet {
-    const url = try std.fmt.allocPrint(allocator, "{s}/pets/{s}", .{ self.base_url, id});
-    errdefer allocator.free(url);
+    pub fn getPet(self: *@This(), arena: std.mem.Allocator, id: []const u8) !Pet {
+    const url = try std.fmt.allocPrint(arena, "{s}/pets/{s}", .{ self.base_url, id});
     const resp = try self.backend.get(url, &.{});
-    const body_copy = try allocator.dupe(u8, resp.body);
-    errdefer allocator.free(body_copy);
+    const body_copy = try arena.dupe(u8, resp.body);
     resp.deinit();
     if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;
-    return try izo.json.decode(allocator, PetMapper, body_copy);
+    return try izo.json.decode(arena, PetMapper, body_copy);
 }
-    pub fn createPet(self: *@This(), allocator: std.mem.Allocator, body: NewPet) !Pet {
-    const url = try std.fmt.allocPrint(allocator, "{s}/pets", .{ self.base_url});
-    errdefer allocator.free(url);
-    const json_body = try izo.json.encode(allocator, body, NewPetMapper, .{});
-    errdefer allocator.free(json_body);
+    pub fn createPet(self: *@This(), arena: std.mem.Allocator, body: NewPet) !Pet {
+    const url = try std.fmt.allocPrint(arena, "{s}/pets", .{ self.base_url});
+    const json_body = try izo.json.encode(arena, body, NewPetMapper, .{});
     const resp = try self.backend.post(url, json_body, &.{.{ .name = "Content-Type", .value = "application/json" }});
-    const body_copy = try allocator.dupe(u8, resp.body);
-    errdefer allocator.free(body_copy);
+    const body_copy = try arena.dupe(u8, resp.body);
     resp.deinit();
     if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;
-    return try izo.json.decode(allocator, PetMapper, body_copy);
+    return try izo.json.decode(arena, PetMapper, body_copy);
 }
     };
 }

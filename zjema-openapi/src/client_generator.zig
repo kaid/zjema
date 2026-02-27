@@ -4,11 +4,7 @@ const type_gen = @import("codegen/type_generator.zig");
 const ast = @import("openapi/ast.zig");
 
 pub const GenerateOptions = struct {
-    /// Enable Server-Sent Events support: generate streaming methods for
-    /// responses with content type "text/event-stream"
     enable_sse: bool = false,
-
-    /// Type generation options (passed to type_generator)
     int_type: []const u8 = "i64",
     string_type: []const u8 = "[]const u8",
     float_type: []const u8 = "f64",
@@ -24,12 +20,10 @@ pub const ClientGenerator = struct {
         return .{ .allocator = allocator };
     }
 
-    /// Generate the full client Zig source code
     pub fn generate(self: @This(), spec: anytype, options: GenerateOptions) ![]const u8 {
         var out = std.ArrayList(u8).initCapacity(self.allocator, 4096) catch return error.OutOfMemory;
         errdefer out.deinit(self.allocator);
 
-        // Generate types using type_generator (includes structs + mappers)
         const types_code = try type_gen.generateTypes(self.allocator, spec, .{
             .int_type = options.int_type,
             .string_type = options.string_type,
@@ -53,7 +47,6 @@ pub const ClientGenerator = struct {
         try out.appendSlice(self.allocator, types_code);
         try out.appendSlice(self.allocator, "\n\n");
 
-        // API Error response (generic)
         try out.appendSlice(self.allocator,
             \\// API Error response
             \\pub const ApiError = struct {
@@ -66,16 +59,15 @@ pub const ClientGenerator = struct {
             \\
         );
 
-        // ApiClient generic skeleton
+        // Pure arena mode - no allocator field
         try out.appendSlice(self.allocator,
             \\pub fn ApiClient(comptime Backend: type) type {
             \\    return struct {
-            \\        allocator: std.mem.Allocator,
             \\        base_url: []const u8,
             \\        backend: Backend,
             \\
-            \\        pub fn init(allocator: std.mem.Allocator, base_url: []const u8, _backend: Backend) @This() {
-            \\            return .{ .allocator = allocator, .base_url = base_url, .backend = _backend };
+            \\        pub fn init(base_url: []const u8, _backend: Backend) @This() {
+            \\            return .{ .base_url = base_url, .backend = _backend };
             \\        }
             \\
             \\        pub fn deinit(self: *@This()) void {
@@ -86,33 +78,36 @@ pub const ClientGenerator = struct {
 
         const type_config = type_gen.TypeGenConfig{};
 
-        // Generate methods from all paths
         var path_it = spec.paths.iterator();
         var path_idx: usize = 0;
         while (path_idx < path_it.len) : (path_idx += 1) {
             const path_str = path_it.keys[path_idx];
             const path_item = path_it.values[path_idx];
 
-            // Supported HTTP methods
             const methods = [_][]const u8{ "get", "put", "post", "delete", "options", "head", "patch", "trace" };
             for (methods) |http_method| {
-                const op = if (std.mem.eql(u8, http_method, "get")) path_item.get else if (std.mem.eql(u8, http_method, "put")) path_item.put else if (std.mem.eql(u8, http_method, "post")) path_item.post else if (std.mem.eql(u8, http_method, "delete")) path_item.delete else if (std.mem.eql(u8, http_method, "options")) path_item.options else if (std.mem.eql(u8, http_method, "head")) path_item.head else if (std.mem.eql(u8, http_method, "patch")) path_item.patch else if (std.mem.eql(u8, http_method, "trace")) path_item.trace else null;
+                const op = if (std.mem.eql(u8, http_method, "get")) path_item.get
+                else if (std.mem.eql(u8, http_method, "put")) path_item.put
+                else if (std.mem.eql(u8, http_method, "post")) path_item.post
+                else if (std.mem.eql(u8, http_method, "delete")) path_item.delete
+                else if (std.mem.eql(u8, http_method, "options")) path_item.options
+                else if (std.mem.eql(u8, http_method, "head")) path_item.head
+                else if (std.mem.eql(u8, http_method, "patch")) path_item.patch
+                else if (std.mem.eql(u8, http_method, "trace")) path_item.trace
+                else null;
                 if (op) |operation| {
                     try generateMethod(&out, self.allocator, path_str, http_method, operation, type_config, options);
                 }
             }
         }
 
-        // Close ApiClient struct (return struct { ... })
         try out.appendSlice(self.allocator, "    };\n");
-        // Close ApiClient function
         try out.appendSlice(self.allocator, "}\n");
 
         return try out.toOwnedSlice(self.allocator);
     }
 };
 
-// Check if response is SSE stream
 fn isSseResponse(operation: ast.Operation) bool {
     if (operation.responses.get("200")) |resp| {
         if (resp.content.get("text/event-stream")) |_| {
@@ -122,7 +117,6 @@ fn isSseResponse(operation: ast.Operation) bool {
     return false;
 }
 
-// generateMethod writes a single API method
 fn generateMethod(
     out: *std.ArrayList(u8),
     allocator: std.mem.Allocator,
@@ -133,16 +127,13 @@ fn generateMethod(
     options: GenerateOptions,
 ) !void {
     const method_name = operation.operationId;
-
-    // Determine if this operation returns an SSE stream
     const is_sse = options.enable_sse and isSseResponse(operation);
 
-    // Start method signature
+    // Method signature with arena
     try out.appendSlice(allocator, "    pub fn ");
     try out.appendSlice(allocator, method_name);
-    try out.appendSlice(allocator, "(self: *@This(), allocator: std.mem.Allocator");
+    try out.appendSlice(allocator, "(self: *@This(), arena: std.mem.Allocator");
 
-    // Request body handling (JSON only)
     var has_json_body = false;
     var body_type_owned: []const u8 = "";
     var return_type_owned: []const u8 = undefined;
@@ -154,7 +145,6 @@ fn generateMethod(
         }
     }
 
-    // Add parameters from operation (all become method args)
     for (operation.parameters) |param| {
         const param_type = try getParamTypeString(allocator, param.schema, type_config);
         defer allocator.free(param_type);
@@ -164,27 +154,21 @@ fn generateMethod(
         try out.appendSlice(allocator, param_type);
     }
 
-    // Add body parameter if present
     if (has_json_body) {
         try out.appendSlice(allocator, ", body: ");
         try out.appendSlice(allocator, body_type_owned);
     }
 
-    // Prepare path formatting
     const fmt_path = try transformPath(allocator, path);
     defer allocator.free(fmt_path);
-    // Prepend base_url placeholder: format string becomes "{s}<path>"
     const full_fmt = try std.fmt.allocPrint(allocator, "{s}{s}", .{ "{s}", fmt_path });
     defer allocator.free(full_fmt);
 
-    // Determine return type and generate body
     if (is_sse) {
-        // Streaming method returns whatever the backend's getStream returns (Stream)
         try out.appendSlice(allocator, ") anytype! {\n");
-        try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(allocator, \"");
+        try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(arena, \"");
         try escapeString(allocator, out, full_fmt);
         try out.appendSlice(allocator, "\", .{self.base_url");
-        // Append path parameters
         var i: usize = 0;
         while (i < path.len) {
             if (path[i] == '{') {
@@ -197,10 +181,8 @@ fn generateMethod(
             }
         }
         try out.appendSlice(allocator, "});\n");
-        try out.appendSlice(allocator, "    errdefer allocator.free(url);\n");
         try out.appendSlice(allocator, "    return try self.backend.getStream(url, &.{});\n");
         try out.appendSlice(allocator, "}\n");
-        // Cleanup: body_type_owned will be freed by caller (generateMethod) at end
         return;
     } else if (operation.responses.get("200")) |resp| {
         if (resp.content.get("application/json")) |json_media| {
@@ -215,11 +197,10 @@ fn generateMethod(
         try out.appendSlice(allocator, ") void {\n");
     }
 
-    // Build URL
-    try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(allocator, \"");
+    // Build URL using arena - no errdefer needed
+    try out.appendSlice(allocator, "    const url = try std.fmt.allocPrint(arena, \"");
     try escapeString(allocator, out, full_fmt);
     try out.appendSlice(allocator, "\", .{ self.base_url");
-    // Append path parameters
     var i: usize = 0;
     while (i < path.len) {
         if (path[i] == '{') {
@@ -232,17 +213,15 @@ fn generateMethod(
         }
     }
     try out.appendSlice(allocator, "});\n");
-    try out.appendSlice(allocator, "    errdefer allocator.free(url);\n");
 
-    // Encode request body if present
+    // Encode body using arena
     if (has_json_body) {
-        try out.appendSlice(allocator, "    const json_body = try izo.json.encode(allocator, body, ");
+        try out.appendSlice(allocator, "    const json_body = try izo.json.encode(arena, body, ");
         try out.appendSlice(allocator, body_type_owned);
         try out.appendSlice(allocator, "Mapper, .{});\n");
-        try out.appendSlice(allocator, "    errdefer allocator.free(json_body);\n");
     }
 
-    // Backend call - simple HTTP methods
+    // Backend call
     try out.appendSlice(allocator, "    const resp = try self.backend.");
     try out.appendSlice(allocator, http_method);
     if (has_json_body) {
@@ -251,19 +230,17 @@ fn generateMethod(
         try out.appendSlice(allocator, "(url, &.{});\n");
     }
 
-    // Copy response body to caller's allocator, then free backend response
-    try out.appendSlice(allocator, "    const body_copy = try allocator.dupe(u8, resp.body);\n");
-    try out.appendSlice(allocator, "    errdefer allocator.free(body_copy);\n");
+    // Copy to arena and free backend response - no errdefer
+    try out.appendSlice(allocator, "    const body_copy = try arena.dupe(u8, resp.body);\n");
     try out.appendSlice(allocator, "    resp.deinit();\n");
 
-    // Status check (2xx)
     try out.appendSlice(allocator, "    if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;\n");
 
-    // Response decoding if JSON expected
+    // Decode using arena
     if (operation.responses.get("200")) |resp| {
         if (resp.content.get("application/json") != null) {
             if (return_type_owned.len > 0) {
-                try out.appendSlice(allocator, "    return try izo.json.decode(allocator, ");
+                try out.appendSlice(allocator, "    return try izo.json.decode(arena, ");
                 try out.appendSlice(allocator, return_type_owned);
                 try out.appendSlice(allocator, "Mapper, body_copy);\n");
             }
@@ -272,7 +249,6 @@ fn generateMethod(
 
     try out.appendSlice(allocator, "}\n");
 
-    // Cleanup allocated type strings
     if (has_json_body) {
         allocator.free(body_type_owned);
     }
@@ -281,7 +257,6 @@ fn generateMethod(
     }
 }
 
-// Get the Zig type string for a schema (mirrors type_generator logic)
 fn getParamTypeString(
     allocator: std.mem.Allocator,
     schema: ast.Schema,
@@ -313,19 +288,17 @@ fn getParamTypeString(
             defer allocator.free(item_type);
             return try std.fmt.allocPrint(allocator, "[]const {s}", .{item_type});
         } else {
-            // Inline object or unknown, treat as opaque
             return try allocator.dupe(u8, "[]const u8");
         }
     }
     return error.InvalidSchema;
 }
 
-// Escape a string for inclusion in a Zig string literal
 fn escapeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), s: []const u8) !void {
     var i: usize = 0;
     while (i < s.len) : (i += 1) {
         switch (s[i]) {
-            '\\', '\"' => {
+            '\\', '"' => {
                 try out.appendSlice(allocator, "\\");
                 try out.appendSlice(allocator, s[i .. i + 1]);
             },
@@ -339,7 +312,6 @@ fn escapeString(allocator: std.mem.Allocator, out: *std.ArrayList(u8), s: []cons
     }
 }
 
-// Transform path template: replace {param} with {s} for std.fmt.allocPrint
 fn transformPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     var out = std.ArrayList(u8).initCapacity(allocator, 0) catch unreachable;
     defer out.deinit(allocator);

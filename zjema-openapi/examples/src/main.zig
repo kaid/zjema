@@ -54,11 +54,13 @@ pub fn main() void {
     var backend = MockBackend.init(allocator);
     defer backend.deinit();
 
-    var client = api.ApiClient(@TypeOf(backend)).init(allocator, "https://petstore.example.com", backend);
+    var client = api.ApiClient(@TypeOf(backend)).init("https://petstore.example.com", backend);
     defer client.deinit();
 
-    // Example: get a pet
-    const pet = client.getPet(allocator, "123") catch |err| {
+    // Example: get a pet using arena for memory management
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const pet = client.getPet(arena.allocator(), "123") catch |err| {
         std.debug.print("Error getting pet: {s}\n", .{@errorName(err)});
         return;
     };
