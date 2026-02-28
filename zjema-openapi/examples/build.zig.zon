@@ -4,11 +4,12 @@
     .fingerprint = 0xc937c38033ad2d8c,
     .minimum_zig_version = "0.16.0-dev",
     .dependencies = .{
-        .zjema_openapi = .{ .path = "../../zjema-openapi" },
         .zjema = .{ .path = "../../zjema" },
+        .zjema_openapi = .{ .path = "../../zjema-openapi" },
         .zjema_openapi_http = .{ .path = "../../zjema-openapi-http" },
         .izomorph = .{
-            .path = "../../../izomorph",
+            .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz",
+            .hash = "izomorph-0.0.0--ctBEgH-AQBr27b1Bwk7Cu8yaXmfFUnBNZMMWJSrivsC",
         },
     },
     .paths = .{

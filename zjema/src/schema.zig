@@ -22,26 +22,19 @@ pub const JsonSchema = struct {
         description: ?[]const u8 = null,
     };
 
-    /// Serialize to JSON using izomorph
-    pub fn toJson(self: JsonSchema, writer: anytype) !void {
-        try izo.json.encodeToWriter(writer, self, JsonSchemaMapper, .{});
-    }
-
-    /// Serialize to JSON string (allocating)
-    pub fn toJsonAlloc(self: JsonSchema, allocator: std.mem.Allocator) ![]const u8 {
-        return try izo.json.encode(allocator, self, JsonSchemaMapper, .{});
-    }
+    // Declare Mapper for automatic element mapper detection in arrays
+    // The actual mapper is defined at the end of the file to avoid comptime circular dependency
+    pub const Mapper = JsonSchemaMapper;
 };
 
 /// Custom serializer for properties field - converts array to object
 pub const PropertiesSerializer = struct {
-    pub fn serialize(properties: ?[]const JsonSchema.Property, jws: anytype) !void {
+    pub fn serialize(properties: ?[]const JsonSchema.Property, jws: anytype, helpers: anytype) !void {
         if (properties) |props| {
             try jws.beginObject();
             for (props) |prop| {
                 try jws.objectField(prop.name);
-                // Recursively serialize the schema - izomorph will check for jsonStringify
-                try jws.write(prop.schema);
+                try helpers.writeMapped(prop.schema);
             }
             try jws.endObject();
         } else {
@@ -50,24 +43,15 @@ pub const PropertiesSerializer = struct {
     }
 };
 
-/// Mapper for JsonSchema using izomorph with custom properties serializer
-pub const JsonSchemaMapper = izo.Mapper(JsonSchema, .{
-    .ref = .{ .alias = "$ref", .omit_null = true },
-    .type = .{ .omit_null = true },
-    .properties = .{
-        .omit_null = true,
-        .strategy = .{ .custom = .{ .to = PropertiesSerializer } },
-    },
-    .required = .{ .omit_null = true },
-    .items = .{ .omit_null = true },
-    .@"enum" = .{ .alias = "enum", .omit_null = true },
-    .anyOf = .{ .omit_null = true },
-    .oneOf = .{ .omit_null = true },
-    .allOf = .{ .omit_null = true },
-    .format = .{ .omit_null = true },
-    .description = .{ .omit_null = true },
-    .nullable = .{ .omit_default = true },
-});
+/// Lazy mapper getter for custom serializer (.with_lazy)
+fn getMappers() []const type {
+    return &.{JsonSchemaMapper};
+}
+
+/// Lazy mapper getter for nested fields (.nested_lazy)
+fn getJsonSchemaMapper() type {
+    return JsonSchemaMapper;
+}
 
 /// Generate JSON Schema struct from a Zig type at comptime
 pub fn toSchema(comptime T: type) JsonSchema {
@@ -171,11 +155,55 @@ fn generateAnyValueSchema() JsonSchema {
     return .{};
 }
 
+// ==================== Mapper Definition (at the end to avoid circular dependency) ====================
+
+/// Mapper for JsonSchema using izomorph with custom properties serializer
+///
+/// Configuration notes:
+/// - items field uses .nested_lazy for nested JsonSchema (single item pointer)
+/// - anyOf/oneOf/allOf use automatic element mapper detection via JsonSchema.Mapper
+///   (element type declares pub const Mapper, so no explicit element_mapper needed)
+pub const JsonSchemaMapper = izo.Mapper(JsonSchema, .{
+    .ref = .{ .alias = "$ref", .omit_null = true },
+    .type = .{ .omit_null = true },
+    .properties = .{
+        .omit_null = true,
+        .strategy = .{
+            .custom = .{
+                .to = PropertiesSerializer,
+                .with_lazy = getMappers,
+            },
+        },
+    },
+    .required = .{ .omit_null = true },
+    // items uses .nested_lazy for proper nested JsonSchema serialization
+    .items = .{ .omit_null = true, .strategy = .{ .nested_lazy = getJsonSchemaMapper } },
+    .@"enum" = .{ .alias = "enum", .omit_null = true },
+    // anyOf/oneOf/allOf use automatic element mapper detection
+    // (JsonSchema declares pub const Mapper = JsonSchemaMapper)
+    .anyOf = .{ .omit_null = true },
+    .oneOf = .{ .omit_null = true },
+    .allOf = .{ .omit_null = true },
+    .format = .{ .omit_null = true },
+    .description = .{ .omit_null = true },
+    .nullable = .{ .omit_default = true },
+});
+
+/// Serialize to JSON using izomorph
+pub fn toJson(self: JsonSchema, writer: anytype) !void {
+    try izo.json.encodeToWriter(writer, self, JsonSchemaMapper, .{});
+}
+
+/// Serialize to JSON string (allocating)
+pub fn toJsonAlloc(self: JsonSchema, allocator: std.mem.Allocator) ![]const u8 {
+    return try izo.json.encode(allocator, self, JsonSchemaMapper, .{});
+}
+
 // ==================== Tests ====================
 
 fn expectSchema(comptime T: type, expected: []const u8) !void {
     const js = toSchema(T);
-    const result = try js.toJsonAlloc(std.testing.allocator);
+    const result = try toJsonAlloc(js, std.testing.allocator);
     defer std.testing.allocator.free(result);
     try std.testing.expectEqualStrings(expected, result);
 }
@@ -243,11 +271,14 @@ test "generate schema for struct with json.Value" {
 
 test "generate schema for json.Value field" {
     const js = toSchema(json.Value);
-    const result = try js.toJsonAlloc(std.testing.allocator);
+    const result = try toJsonAlloc(js, std.testing.allocator);
     defer std.testing.allocator.free(result);
     try std.testing.expectEqualStrings("{}", result);
 }
 
+// Test union type with automatic element mapper detection
+// JsonSchema now has `pub const Mapper = JsonSchemaMapper`, which enables
+// automatic mapper detection for arrays of JsonSchema (like oneOf)
 test "generate schema for union type" {
     const MyUnion = union(enum) {
         int: i32,
@@ -256,5 +287,8 @@ test "generate schema for union type" {
     const Args = struct {
         value: MyUnion,
     };
+    // With automatic element mapper detection, oneOf should now output:
+    // {"oneOf":[{"type":"integer"},{"type":"string"}]}
+    // instead of including all null fields
     try expectSchema(Args, "{\"type\":\"object\",\"properties\":{\"value\":{\"oneOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]}},\"required\":[\"value\"]}");
 }

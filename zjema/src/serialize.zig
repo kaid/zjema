@@ -16,7 +16,7 @@ pub fn write(sch: sch_mod.JsonSchema, writer: anytype, options: SerializeOptions
 }
 
 /// Convert schema to string using allocator (returns allocated string)
-pub fn stringify(allocator: std.mem.Allocator, sch: sch_mod.JsonSchema, options: SerializeOptions) ![]u8 {
+pub fn stringify(allocator: std.mem.Allocator, sch: sch_mod.JsonSchema, options: SerializeOptions) ![]const u8 {
     const encode_options: @import("izomorph").json.EncodeOptions = .{
         .pretty = options.pretty,
     };

@@ -5,6 +5,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Get izomorph dependency
+    const izo_dep = b.dependency("izomorph", .{});
+
     // Expose modules for dependent packages
     // Note: These modules are used when this package is a dependency.
     // The subpackages use their own build.zig when built standalone.
@@ -12,6 +15,9 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("zjema/src/zjema.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "izomorph", .module = izo_dep.module("izomorph") },
+        },
     });
 
     const zjema_openapi_mod = b.addModule("zjema_openapi", .{
