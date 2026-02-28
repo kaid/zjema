@@ -2,9 +2,7 @@
     .name = .zjema,
     .version = "0.16.0-dev.2637+6a9510c0e",
     .dependencies = .{
-        .izomorph = .{
-            .path = "../izomorph",
-        },
+        .izomorph = .{ .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz", .hash = "izomorph-0.0.0--ctBEnzCAQDpiU9cDRMBMz1gu5k3B44-Nf7v60K9PP33" },
     },
     .paths = .{""},
     .fingerprint = 0x852155fb8629f3f2,

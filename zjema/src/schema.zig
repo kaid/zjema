@@ -33,15 +33,31 @@ pub const JsonSchema = struct {
     }
 };
 
-// Mappers for izomorph serialization
-pub const PropertyMapper = izo.Mapper(JsonSchema.Property, .{
-    .schema = .{ .alias = "schema" },
-});
+/// Custom serializer for properties field - converts array to object
+pub const PropertiesSerializer = struct {
+    pub fn serialize(properties: ?[]const JsonSchema.Property, jws: anytype) !void {
+        if (properties) |props| {
+            try jws.beginObject();
+            for (props) |prop| {
+                try jws.objectField(prop.name);
+                // Recursively serialize the schema - izomorph will check for jsonStringify
+                try jws.write(prop.schema);
+            }
+            try jws.endObject();
+        } else {
+            try jws.write(null);
+        }
+    }
+};
 
+/// Mapper for JsonSchema using izomorph with custom properties serializer
 pub const JsonSchemaMapper = izo.Mapper(JsonSchema, .{
     .ref = .{ .alias = "$ref", .omit_null = true },
     .type = .{ .omit_null = true },
-    .properties = .{ .omit_null = true },
+    .properties = .{
+        .omit_null = true,
+        .strategy = .{ .custom = .{ .to = PropertiesSerializer } },
+    },
     .required = .{ .omit_null = true },
     .items = .{ .omit_null = true },
     .@"enum" = .{ .alias = "enum", .omit_null = true },
@@ -50,7 +66,7 @@ pub const JsonSchemaMapper = izo.Mapper(JsonSchema, .{
     .allOf = .{ .omit_null = true },
     .format = .{ .omit_null = true },
     .description = .{ .omit_null = true },
-    .nullable = .{ .omit_default = true }, // omit if false (default)
+    .nullable = .{ .omit_default = true },
 });
 
 /// Generate JSON Schema struct from a Zig type at comptime
