@@ -91,7 +91,7 @@ pub fn fromSchema(
     // Mapper
     try out.appendSlice(allocator, "pub const ");
     try out.appendSlice(allocator, name);
-    try out.appendSlice(allocator, "Mapper = izo.Mapper(");
+    try out.appendSlice(allocator, "Mapper = json.Mapper(");
     try out.appendSlice(allocator, name);
     try out.appendSlice(allocator, ", .{});\n");
 

@@ -2,7 +2,7 @@
 const std = @import("std");
 const zjema_openapi = @import("zjema_openapi");
 pub const backend = zjema_openapi.backend;
-const izo = @import("izomorph");
+const json = zjema_openapi.json;
 
 // ============= TYPES =============
 pub const Pet = struct {
@@ -11,14 +11,14 @@ pub const Pet = struct {
     tag: ?[]const u8 = null,
 };
 
-pub const PetMapper = izo.Mapper(Pet, .{});
+pub const PetMapper = json.Mapper(Pet, .{});
 
 pub const NewPet = struct {
     name: []const u8,
     tag: ?[]const u8 = null,
 };
 
-pub const NewPetMapper = izo.Mapper(NewPet, .{});
+pub const NewPetMapper = json.Mapper(NewPet, .{});
 
 
 
@@ -27,7 +27,7 @@ pub const ApiError = struct {
     code: i64,
     message: []const u8,
 };
-pub const ApiErrorMapper = izo.Mapper(ApiError, .{});
+pub const ApiErrorMapper = json.Mapper(ApiError, .{});
 
 // ============= API CLIENT =============
 pub fn ApiClient(comptime Backend: type) type {
@@ -48,16 +48,16 @@ pub fn ApiClient(comptime Backend: type) type {
     const body_copy = try arena.dupe(u8, resp.body);
     resp.deinit();
     if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;
-    return try izo.json.decode(arena, PetMapper, body_copy);
+    return try json.decode(arena, PetMapper, body_copy, .{});
 }
     pub fn createPet(self: *@This(), arena: std.mem.Allocator, body: NewPet) !Pet {
     const url = try std.fmt.allocPrint(arena, "{s}/pets", .{ self.base_url});
-    const json_body = try izo.json.encode(arena, body, NewPetMapper, .{});
+    const json_body = try json.encode(arena, body, NewPetMapper, .{});
     const resp = try self.backend.post(url, json_body, &.{.{ .name = "Content-Type", .value = "application/json" }});
     const body_copy = try arena.dupe(u8, resp.body);
     resp.deinit();
     if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError;
-    return try izo.json.decode(arena, PetMapper, body_copy);
+    return try json.decode(arena, PetMapper, body_copy, .{});
 }
     };
 }

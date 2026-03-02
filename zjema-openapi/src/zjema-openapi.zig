@@ -6,11 +6,14 @@
 // - Backend interface types (Header, Response, Stream)
 
 // Core modules
+const zjema = @import("zjema");
+
 pub const parser_mod = @import("openapi/parser.zig");
 pub const ast = @import("openapi/ast.zig");
 pub const type_generator = @import("codegen/type_generator.zig");
 pub const client_generator = @import("client_generator.zig");
 pub const backend = @import("backend.zig");
+pub const json = zjema.json;
 
 // Re-export AST types directly
 pub const OpenApiSpec = ast.OpenApiSpec;

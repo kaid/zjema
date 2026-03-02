@@ -131,7 +131,7 @@ test "client_generator produces valid client code" {
     try std.testing.expect(std.mem.indexOf(u8, code, "pub fn ApiClient(comptime Backend: type) type") != null);
     try std.testing.expect(std.mem.indexOf(u8, code, "pub fn getUser(self: *@This(), arena: std.mem.Allocator") != null);
     try std.testing.expect(std.mem.indexOf(u8, code, "backend = zjema_openapi.backend") != null);
-    try std.testing.expect(std.mem.indexOf(u8, code, "return try izo.json.decode(arena, ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, code, "return try json.decode(arena, ") != null);
     try std.testing.expect(std.mem.indexOf(u8, code, "if (resp.status_code < 200 or resp.status_code >= 300) return error.ApiError") != null);
     try std.testing.expect(std.mem.indexOf(u8, code, "PersonMapper") != null);
 }

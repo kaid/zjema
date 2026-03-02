@@ -1,5 +1,5 @@
 const std = @import("std");
-const api = @import("generated_api.zig");
+const api = @import("generated_api");
 
 // Simple in-memory backend for demonstration
 const MockBackend = struct {

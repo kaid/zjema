@@ -62,7 +62,7 @@ test "type_generator generates simple object" {
     // Verify output contains struct and mapper
     try std.testing.expect(std.mem.indexOf(u8, types_code, "pub const Person = struct") != null);
     try std.testing.expect(std.mem.indexOf(u8, types_code, "name: []const u8") != null);
-    try std.testing.expect(std.mem.indexOf(u8, types_code, "PersonMapper = izo.Mapper") != null);
+    try std.testing.expect(std.mem.indexOf(u8, types_code, "PersonMapper = json.Mapper(") != null);
 }
 
 test "type_generator handles dependencies" {

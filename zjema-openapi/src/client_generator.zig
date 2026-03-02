@@ -39,7 +39,7 @@ pub const ClientGenerator = struct {
             \\const std = @import("std");
             \\const zjema_openapi = @import("zjema_openapi");
             \\pub const backend = zjema_openapi.backend;
-            \\const izo = @import("izomorph");
+            \\const json = zjema_openapi.json;
             \\
             \\// ============= TYPES =============
             \\
@@ -53,7 +53,7 @@ pub const ClientGenerator = struct {
             \\    code: i64,
             \\    message: []const u8,
             \\};
-            \\pub const ApiErrorMapper = izo.Mapper(ApiError, .{});
+            \\pub const ApiErrorMapper = json.Mapper(ApiError, .{});
             \\
             \\// ============= API CLIENT =============
             \\
@@ -86,15 +86,7 @@ pub const ClientGenerator = struct {
 
             const methods = [_][]const u8{ "get", "put", "post", "delete", "options", "head", "patch", "trace" };
             for (methods) |http_method| {
-                const op = if (std.mem.eql(u8, http_method, "get")) path_item.get
-                else if (std.mem.eql(u8, http_method, "put")) path_item.put
-                else if (std.mem.eql(u8, http_method, "post")) path_item.post
-                else if (std.mem.eql(u8, http_method, "delete")) path_item.delete
-                else if (std.mem.eql(u8, http_method, "options")) path_item.options
-                else if (std.mem.eql(u8, http_method, "head")) path_item.head
-                else if (std.mem.eql(u8, http_method, "patch")) path_item.patch
-                else if (std.mem.eql(u8, http_method, "trace")) path_item.trace
-                else null;
+                const op = if (std.mem.eql(u8, http_method, "get")) path_item.get else if (std.mem.eql(u8, http_method, "put")) path_item.put else if (std.mem.eql(u8, http_method, "post")) path_item.post else if (std.mem.eql(u8, http_method, "delete")) path_item.delete else if (std.mem.eql(u8, http_method, "options")) path_item.options else if (std.mem.eql(u8, http_method, "head")) path_item.head else if (std.mem.eql(u8, http_method, "patch")) path_item.patch else if (std.mem.eql(u8, http_method, "trace")) path_item.trace else null;
                 if (op) |operation| {
                     try generateMethod(&out, self.allocator, path_str, http_method, operation, type_config, options);
                 }
@@ -216,7 +208,7 @@ fn generateMethod(
 
     // Encode body using arena
     if (has_json_body) {
-        try out.appendSlice(allocator, "    const json_body = try izo.json.encode(arena, body, ");
+        try out.appendSlice(allocator, "    const json_body = try json.encode(arena, body, ");
         try out.appendSlice(allocator, body_type_owned);
         try out.appendSlice(allocator, "Mapper, .{});\n");
     }
@@ -240,9 +232,9 @@ fn generateMethod(
     if (operation.responses.get("200")) |resp| {
         if (resp.content.get("application/json") != null) {
             if (return_type_owned.len > 0) {
-                try out.appendSlice(allocator, "    return try izo.json.decode(arena, ");
+                try out.appendSlice(allocator, "    return try json.decode(arena, ");
                 try out.appendSlice(allocator, return_type_owned);
-                try out.appendSlice(allocator, "Mapper, body_copy);\n");
+                try out.appendSlice(allocator, "Mapper, body_copy, .{});\n");
             }
         }
     }

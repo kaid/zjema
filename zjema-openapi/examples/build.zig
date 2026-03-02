@@ -30,15 +30,18 @@ pub fn build(b: *std.Build) void {
     });
 
     // Import the generated code (created by codegen step)
-    exe.root_module.addImport("generated_api", b.createModule(.{
+    const generated_api_mod = b.createModule(.{
         .root_source_file = b.path("src/generated_api.zig"),
         .target = target,
         .optimize = optimize,
-    }));
+        .imports = &.{
+            .{ .name = "zjema_openapi", .module = zjema_openapi_mod },
+        },
+    });
+    exe.root_module.addImport("generated_api", generated_api_mod);
 
     // Import required dependencies for generated_api
     exe.root_module.addImport("zjema_openapi", zjema_openapi_mod);
-    exe.root_module.addImport("izomorph", b.dependency("izomorph", .{}).module("izomorph"));
 
     // Optionally use StdHttpBackend from zjema-openapi-http
     // exe.root_module.addImport("http", b.dependency("zjema_openapi_http", .{}).module("zjema_openapi_http"));

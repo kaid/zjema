@@ -22,7 +22,7 @@ test "fromSchema generates simple struct" {
     // Check that the generated code contains the struct and Mapper
     try std.testing.expect(std.mem.indexOf(u8, code, "pub const Person = struct") != null);
     try std.testing.expect(std.mem.indexOf(u8, code, "name: []const u8") != null);
-    try std.testing.expect(std.mem.indexOf(u8, code, "PersonMapper = izo.Mapper") != null);
+    try std.testing.expect(std.mem.indexOf(u8, code, "PersonMapper = json.Mapper(") != null);
 }
 
 test "fromSchema with optional field" {
