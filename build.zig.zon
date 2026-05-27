@@ -1,8 +1,8 @@
 .{
     .name = .zjema,
-    .version = "0.16.0-dev.2637+6a9510c0e",
+    .version = "0.0.0",
     .dependencies = .{
-        .izomorph = .{ .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz", .hash = "izomorph-0.0.0--ctBEilcAgDKBhU9FWM_BKclJhDQxadRNlurqafjg4RK" },
+        .izomorph = .{ .url = "https://github.com/kaid/izomorph/archive/refs/heads/trunk.tar.gz", .hash = "izomorph-0.0.0--ctBEhZcAgDzbArzBwShpnGWA1E08jDDq1p8h5Zs81eU" },
     },
     .paths = .{""},
     .fingerprint = 0x852155fb8629f3f2,
