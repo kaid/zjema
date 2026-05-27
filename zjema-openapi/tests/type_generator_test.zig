@@ -26,8 +26,8 @@ test "type_generator generates simple object" {
     person_schema_obj.* = .{
         .type = "object",
         .properties = blk: {
-            var map = std.StringArrayHashMap(zjema_openapi.Schema).init(allocator);
-            try map.put("name", name_schema);
+            var map = try std.array_hash_map.String(zjema_openapi.Schema).init(allocator, &.{}, &.{});
+            try map.put(allocator, "name", name_schema);
             break :blk map;
         },
         .required = &[_][]const u8{"name"},
@@ -43,14 +43,14 @@ test "type_generator generates simple object" {
     const person_schema = zjema_openapi.Schema{ .object = person_schema_obj };
 
     // Build spec with Person in components
-    var schemas = std.StringArrayHashMap(zjema_openapi.Schema).init(allocator);
-    try schemas.put("Person", person_schema);
+    var schemas = try std.array_hash_map.String(zjema_openapi.Schema).init(allocator, &.{}, &.{});
+    try schemas.put(allocator, "Person", person_schema);
 
     const comp = zjema_openapi.Components{ .schemas = schemas };
     const spec = zjema_openapi.OpenApiSpec{
         .openapi = "3.0.0",
         .info = .{ .title = "test", .version = "1.0.0" },
-        .paths = std.StringArrayHashMap(zjema_openapi.PathItem).init(allocator),
+        .paths = try std.array_hash_map.String(zjema_openapi.PathItem).init(allocator, &.{}, &.{}),
         .components = comp,
         .servers = &.{},
     };
@@ -90,8 +90,8 @@ test "type_generator handles dependencies" {
     address_obj.* = .{
         .type = "object",
         .properties = blk: {
-            var map = std.StringArrayHashMap(zjema_openapi.Schema).init(allocator);
-            try map.put("street", street_schema);
+            var map = try std.array_hash_map.String(zjema_openapi.Schema).init(allocator, &.{}, &.{});
+            try map.put(allocator, "street", street_schema);
             break :blk map;
         },
         .required = &[_][]const u8{"street"},
@@ -111,8 +111,8 @@ test "type_generator handles dependencies" {
     person_obj.* = .{
         .type = "object",
         .properties = blk: {
-            var map = std.StringArrayHashMap(zjema_openapi.Schema).init(allocator);
-            try map.put("address", .{ .ref = "#/components/schemas/Address" });
+            var map = try std.array_hash_map.String(zjema_openapi.Schema).init(allocator, &.{}, &.{});
+            try map.put(allocator, "address", .{ .ref = "#/components/schemas/Address" });
             break :blk map;
         },
         .required = &[_][]const u8{"address"},
@@ -128,15 +128,15 @@ test "type_generator handles dependencies" {
     const person_schema = zjema_openapi.Schema{ .object = person_obj };
 
     // Build spec with both schemas
-    var schemas = std.StringArrayHashMap(zjema_openapi.Schema).init(allocator);
-    try schemas.put("Address", address_schema);
-    try schemas.put("Person", person_schema);
+    var schemas = try std.array_hash_map.String(zjema_openapi.Schema).init(allocator, &.{}, &.{});
+    try schemas.put(allocator, "Address", address_schema);
+    try schemas.put(allocator, "Person", person_schema);
 
     const comp = zjema_openapi.Components{ .schemas = schemas };
     const spec = zjema_openapi.OpenApiSpec{
         .openapi = "3.0.0",
         .info = .{ .title = "test", .version = "1.0.0" },
-        .paths = std.StringArrayHashMap(zjema_openapi.PathItem).init(allocator),
+        .paths = try std.array_hash_map.String(zjema_openapi.PathItem).init(allocator, &.{}, &.{}),
         .components = comp,
         .servers = &.{},
     };

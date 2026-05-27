@@ -25,8 +25,8 @@ test "client_generator produces valid client code" {
     person_schema_obj.* = .{
         .type = "object",
         .properties = blk: {
-            var map = std.StringArrayHashMap(zjema_openapi.Schema).init(allocator);
-            try map.put("name", name_schema);
+            var map = try std.array_hash_map.String(zjema_openapi.Schema).init(allocator, &.{}, &.{});
+            try map.put(allocator, "name", name_schema);
             break :blk map;
         },
         .required = &[_][]const u8{"name"},
@@ -42,27 +42,27 @@ test "client_generator produces valid client code" {
     const person_schema = zjema_openapi.Schema{ .object = person_schema_obj };
 
     // Build spec with Person in components
-    var schemas = std.StringArrayHashMap(zjema_openapi.Schema).init(allocator);
-    try schemas.put("Person", person_schema);
+    var schemas = try std.array_hash_map.String(zjema_openapi.Schema).init(allocator, &.{}, &.{});
+    try schemas.put(allocator, "Person", person_schema);
 
     const comp = zjema_openapi.Components{ .schemas = schemas };
-    var paths = std.StringArrayHashMap(zjema_openapi.PathItem).init(allocator);
+    var paths = try std.array_hash_map.String(zjema_openapi.PathItem).init(allocator, &.{}, &.{});
 
     // Create response with Person
     // Add 200 response with JSON body
     const resp_200 = zjema_openapi.Response{
         .description = "User object",
         .content = blk: {
-            var content_map = std.StringArrayHashMap(zjema_openapi.MediaType).init(allocator);
-            try content_map.put("application/json", .{
+            var content_map = try std.array_hash_map.String(zjema_openapi.MediaType).init(allocator, &.{}, &.{});
+            try content_map.put(allocator, "application/json", .{
                 .schema = person_schema,
                 .example = null,
             });
             break :blk content_map;
         },
     };
-    var responses = std.StringArrayHashMap(zjema_openapi.Response).init(allocator);
-    try responses.put("200", resp_200);
+    var responses = try std.array_hash_map.String(zjema_openapi.Response).init(allocator, &.{}, &.{});
+    try responses.put(allocator, "200", resp_200);
 
     // Create id parameter
     const id_schema_obj = try allocator.create(zjema_openapi.SchemaObject);
@@ -112,7 +112,7 @@ test "client_generator produces valid client code" {
         .patch = null,
         .trace = null,
     };
-    try paths.put("/users/{id}", path_item);
+    try paths.put(allocator, "/users/{id}", path_item);
 
     const spec = zjema_openapi.OpenApiSpec{
         .openapi = "3.0.0",

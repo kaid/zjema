@@ -91,9 +91,9 @@ fn parseInfo(allocator: std.mem.Allocator, root_obj: json.ObjectMap, key: []cons
 
 fn parseServers(allocator: std.mem.Allocator, val: json.Value) ![]ast.Server {
     const arr = try asArray(val);
-    var list = std.ArrayList(ast.Server){};
-    errdefer list.deinit(allocator);
     const items = arr.items;
+    var list = try std.ArrayList(ast.Server).initCapacity(allocator, items.len);
+    errdefer list.deinit(allocator);
     var i: usize = 0;
     while (i < items.len) : (i += 1) {
         const obj = try asObject(items[i]);
@@ -107,17 +107,17 @@ fn parseServers(allocator: std.mem.Allocator, val: json.Value) ![]ast.Server {
     return try list.toOwnedSlice(allocator);
 }
 
-fn parsePaths(allocator: std.mem.Allocator, root_obj: json.ObjectMap, key: []const u8) !std.StringArrayHashMap(ast.PathItem) {
+fn parsePaths(allocator: std.mem.Allocator, root_obj: json.ObjectMap, key: []const u8) !std.array_hash_map.String(ast.PathItem) {
     const val = root_obj.get(key) orelse return error.MissingField;
     const paths_obj = try asObject(val);
-    var map = std.StringArrayHashMap(ast.PathItem).init(allocator);
-    var it = paths_obj.iterator();
+    var map = try std.array_hash_map.String(ast.PathItem).init(allocator, &.{}, &.{});
+    const it = paths_obj.iterator();
     var i: usize = 0;
     while (i < it.len) : (i += 1) {
         const key_str = it.keys[i];
         const value = it.values[i];
         const path_item = try parsePathItem(allocator, value);
-        try map.put(key_str, path_item);
+        try map.put(allocator, key_str, path_item);
     }
     return map;
 }
@@ -172,9 +172,9 @@ fn parseOperation(allocator: std.mem.Allocator, val: json.Value) !ast.Operation 
 
 fn parseStringArray(allocator: std.mem.Allocator, val: json.Value) ![][]const u8 {
     const arr = try asArray(val);
-    var list = std.ArrayList([]const u8){};
-    errdefer list.deinit(allocator);
     const items = arr.items;
+    var list = try std.ArrayList([]const u8).initCapacity(allocator, items.len);
+    errdefer list.deinit(allocator);
     var i: usize = 0;
     while (i < items.len) : (i += 1) {
         if (items[i] != .string) return error.InvalidType;
@@ -185,9 +185,9 @@ fn parseStringArray(allocator: std.mem.Allocator, val: json.Value) ![][]const u8
 
 fn parseParameters(allocator: std.mem.Allocator, val: json.Value) ![]ast.Parameter {
     const arr = try asArray(val);
-    var list = std.ArrayList(ast.Parameter){};
-    errdefer list.deinit(allocator);
     const items = arr.items;
+    var list = try std.ArrayList(ast.Parameter).initCapacity(allocator, items.len);
+    errdefer list.deinit(allocator);
     var i: usize = 0;
     while (i < items.len) : (i += 1) {
         const obj = try asObject(items[i]);
@@ -222,10 +222,10 @@ fn parseRequestBody(allocator: std.mem.Allocator, val: json.Value) !ast.RequestB
     };
 }
 
-fn parseMediaTypes(allocator: std.mem.Allocator, val: json.Value) !std.StringArrayHashMap(ast.MediaType) {
+fn parseMediaTypes(allocator: std.mem.Allocator, val: json.Value) !std.array_hash_map.String(ast.MediaType) {
     const obj = try asObject(val);
-    var map = std.StringArrayHashMap(ast.MediaType).init(allocator);
-    var it = obj.iterator();
+    var map = try std.array_hash_map.String(ast.MediaType).init(allocator, &.{}, &.{});
+    const it = obj.iterator();
     var i: usize = 0;
     while (i < it.len) : (i += 1) {
         const key_str = it.keys[i];
@@ -234,7 +234,7 @@ fn parseMediaTypes(allocator: std.mem.Allocator, val: json.Value) !std.StringArr
         const schema_val = media_obj.get("schema") orelse return error.MissingSchema;
         const schema = try parseSchema(allocator, schema_val);
         const example = if (media_obj.get("example")) |ex| ex else null;
-        try map.put(key_str, ast.MediaType{
+        try map.put(allocator, key_str, ast.MediaType{
             .schema = schema,
             .example = example,
         });
@@ -242,11 +242,11 @@ fn parseMediaTypes(allocator: std.mem.Allocator, val: json.Value) !std.StringArr
     return map;
 }
 
-fn parseResponses(allocator: std.mem.Allocator, obj: json.ObjectMap, key: []const u8) !std.StringArrayHashMap(ast.Response) {
+fn parseResponses(allocator: std.mem.Allocator, obj: json.ObjectMap, key: []const u8) !std.array_hash_map.String(ast.Response) {
     const val = obj.get(key) orelse return error.MissingField;
     const responses_obj = try asObject(val);
-    var map = std.StringArrayHashMap(ast.Response).init(allocator);
-    var it = responses_obj.iterator();
+    var map = try std.array_hash_map.String(ast.Response).init(allocator, &.{}, &.{});
+    const it = responses_obj.iterator();
     var i: usize = 0;
     while (i < it.len) : (i += 1) {
         const key_str = it.keys[i];
@@ -256,8 +256,8 @@ fn parseResponses(allocator: std.mem.Allocator, obj: json.ObjectMap, key: []cons
         const content_map = if (resp_obj.get("content")) |content_val|
             try parseMediaTypes(allocator, content_val)
         else
-            std.StringArrayHashMap(ast.MediaType).init(allocator);
-        try map.put(key_str, ast.Response{
+            try std.array_hash_map.String(ast.MediaType).init(allocator, &.{}, &.{});
+        try map.put(allocator, key_str, ast.Response{
             .description = description,
             .content = content_map,
         });
@@ -274,16 +274,16 @@ fn parseComponents(allocator: std.mem.Allocator, val: json.Value) !ast.Component
     };
 }
 
-fn parseSchemas(allocator: std.mem.Allocator, val: json.Value) !std.StringArrayHashMap(ast.Schema) {
+fn parseSchemas(allocator: std.mem.Allocator, val: json.Value) !std.array_hash_map.String(ast.Schema) {
     const obj = try asObject(val);
-    var map = std.StringArrayHashMap(ast.Schema).init(allocator);
-    var it = obj.iterator();
+    var map = try std.array_hash_map.String(ast.Schema).init(allocator, &.{}, &.{});
+    const it = obj.iterator();
     var i: usize = 0;
     while (i < it.len) : (i += 1) {
         const key_str = it.keys[i];
         const value = it.values[i];
         const schema = try parseSchema(allocator, value);
-        try map.put(key_str, schema);
+        try map.put(allocator, key_str, schema);
     }
     return map;
 }
@@ -306,17 +306,17 @@ fn parseSchema(allocator: std.mem.Allocator, val: json.Value) !ast.Schema {
     const description = getOptionalString(obj, "description");
 
     // Properties
-    var props_map: ?std.StringArrayHashMap(ast.Schema) = null;
+    var props_map: ?std.array_hash_map.String(ast.Schema) = null;
     if (obj.get("properties")) |props_val| {
         const props_obj = try asObject(props_val);
-        props_map = std.StringArrayHashMap(ast.Schema).init(allocator);
-        var it = props_obj.iterator();
+        props_map = try std.array_hash_map.String(ast.Schema).init(allocator, &.{}, &.{});
+        const it = props_obj.iterator();
         var i: usize = 0;
         while (i < it.len) : (i += 1) {
             const key_str = it.keys[i];
             const value = it.values[i];
             const prop_schema = try parseSchema(allocator, value);
-            try props_map.?.put(key_str, prop_schema);
+            try props_map.?.put(allocator, key_str, prop_schema);
         }
     }
 
@@ -324,9 +324,9 @@ fn parseSchema(allocator: std.mem.Allocator, val: json.Value) !ast.Schema {
     var required_slice: []const []const u8 = &.{};
     if (obj.get("required")) |req_val| {
         const arr = try asArray(req_val);
-        var req_list = std.ArrayList([]const u8){};
-        errdefer req_list.deinit(allocator);
         const items = arr.items;
+        var req_list = try std.ArrayList([]const u8).initCapacity(allocator, items.len);
+        errdefer req_list.deinit(allocator);
         var i: usize = 0;
         while (i < items.len) : (i += 1) {
             if (items[i] != .string) return error.InvalidRequired;
@@ -345,9 +345,9 @@ fn parseSchema(allocator: std.mem.Allocator, val: json.Value) !ast.Schema {
     var oneof_list: []ast.Schema = &.{};
     if (obj.get("oneOf")) |oneof_val| {
         const arr = try asArray(oneof_val);
-        var list = std.ArrayList(ast.Schema){};
-        errdefer list.deinit(allocator);
         const items = arr.items;
+        var list = try std.ArrayList(ast.Schema).initCapacity(allocator, items.len);
+        errdefer list.deinit(allocator);
         var i: usize = 0;
         while (i < items.len) : (i += 1) {
             try list.append(allocator, try parseSchema(allocator, items[i]));
@@ -359,9 +359,9 @@ fn parseSchema(allocator: std.mem.Allocator, val: json.Value) !ast.Schema {
     var anyof_list: []ast.Schema = &.{};
     if (obj.get("anyOf")) |anyof_val| {
         const arr = try asArray(anyof_val);
-        var list = std.ArrayList(ast.Schema){};
-        errdefer list.deinit(allocator);
         const items = arr.items;
+        var list = try std.ArrayList(ast.Schema).initCapacity(allocator, items.len);
+        errdefer list.deinit(allocator);
         var i: usize = 0;
         while (i < items.len) : (i += 1) {
             try list.append(allocator, try parseSchema(allocator, items[i]));
@@ -373,9 +373,9 @@ fn parseSchema(allocator: std.mem.Allocator, val: json.Value) !ast.Schema {
     var allof_list: []ast.Schema = &.{};
     if (obj.get("allOf")) |allof_val| {
         const arr = try asArray(allof_val);
-        var list = std.ArrayList(ast.Schema){};
-        errdefer list.deinit(allocator);
         const items = arr.items;
+        var list = try std.ArrayList(ast.Schema).initCapacity(allocator, items.len);
+        errdefer list.deinit(allocator);
         var i: usize = 0;
         while (i < items.len) : (i += 1) {
             try list.append(allocator, try parseSchema(allocator, items[i]));
@@ -387,9 +387,9 @@ fn parseSchema(allocator: std.mem.Allocator, val: json.Value) !ast.Schema {
     var enum_list: []json.Value = &.{};
     if (obj.get("enum")) |enum_val| {
         const arr = try asArray(enum_val);
-        var list = std.ArrayList(json.Value){};
-        errdefer list.deinit(allocator);
         const items = arr.items;
+        var list = try std.ArrayList(json.Value).initCapacity(allocator, items.len);
+        errdefer list.deinit(allocator);
         var i: usize = 0;
         while (i < items.len) : (i += 1) {
             try list.append(allocator, items[i]);

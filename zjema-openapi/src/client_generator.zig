@@ -78,7 +78,7 @@ pub const ClientGenerator = struct {
 
         const type_config = type_gen.TypeGenConfig{};
 
-        var path_it = spec.paths.iterator();
+        const path_it = spec.paths.iterator();
         var path_idx: usize = 0;
         while (path_idx < path_it.len) : (path_idx += 1) {
             const path_str = path_it.keys[path_idx];

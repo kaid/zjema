@@ -47,22 +47,22 @@ pub fn generateTypes(
     const arena_alloc = arena.allocator();
 
     // Build a map of schema name -> zjema.JsonSchema
-    var schema_map = std.StringArrayHashMap(zjema.schema.JsonSchema).init(arena_alloc);
-    try schema_map.ensureTotalCapacity(comp.schemas.count());
+    var schema_map = try std.array_hash_map.String(zjema.schema.JsonSchema).init(arena_alloc, &.{}, &.{});
+    try schema_map.ensureTotalCapacity(allocator, comp.schemas.count());
 
     // Convert all OpenAPI schemas to zjema.JsonSchema
-    var it = comp.schemas.iterator();
+    const it = comp.schemas.iterator();
     var i: usize = 0;
     while (i < it.len) : (i += 1) {
         const name = it.keys[i];
         const openapi_schema = it.values[i];
         const zjema_schema = try convertSchema(arena_alloc, openapi_schema, &schema_map);
-        try schema_map.put(name, zjema_schema);
+        try schema_map.put(allocator, name, zjema_schema);
     }
 
     // Topological ordering: collect all schema names
     var name_list = std.ArrayList([]const u8).initCapacity(arena_alloc, 0) catch unreachable;
-    var name_it = comp.schemas.iterator();
+    const name_it = comp.schemas.iterator();
     var j: usize = 0;
     while (j < name_it.len) : (j += 1) {
         try name_list.append(arena_alloc, name_it.keys[j]);
@@ -177,7 +177,7 @@ pub fn generateTypes(
 fn convertSchema(
     arena: std.mem.Allocator,
     openapi_schema: ast.Schema,
-    schema_map: *std.StringArrayHashMap(zjema.schema.JsonSchema),
+    schema_map: *std.array_hash_map.String(zjema.schema.JsonSchema),
 ) anyerror!zjema.schema.JsonSchema {
     switch (openapi_schema) {
         .ref => |ref| {
@@ -187,7 +187,7 @@ fn convertSchema(
             // Convert properties from HashMap to slice
             var props_list = std.ArrayList(zjema.schema.JsonSchema.Property).initCapacity(arena, 0) catch unreachable;
             if (obj.properties) |props_map| {
-                var pit = props_map.iterator();
+                const pit = props_map.iterator();
                 var pj: usize = 0;
                 while (pj < pit.len) : (pj += 1) {
                     const prop_name = pit.keys[pj];

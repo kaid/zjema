@@ -5,7 +5,7 @@ const json = std.json;
 pub const OpenApiSpec = struct {
     openapi: []const u8,
     info: Info,
-    paths: std.StringArrayHashMap(PathItem),
+    paths: std.array_hash_map.String(PathItem),
     components: ?Components = null,
     servers: []Server = &.{},
 };
@@ -38,7 +38,7 @@ pub const Operation = struct {
     description: ?[]const u8 = null,
     parameters: []Parameter = &.{},
     requestBody: ?RequestBody = null,
-    responses: std.StringArrayHashMap(Response),
+    responses: std.array_hash_map.String(Response),
     tags: [][]const u8 = &.{},
 };
 
@@ -60,7 +60,7 @@ pub const ParameterLocation = enum {
 pub const RequestBody = struct {
     description: ?[]const u8 = null,
     required: bool = false,
-    content: std.StringArrayHashMap(MediaType),
+    content: std.array_hash_map.String(MediaType),
 };
 
 pub const MediaType = struct {
@@ -70,11 +70,11 @@ pub const MediaType = struct {
 
 pub const Response = struct {
     description: []const u8,
-    content: std.StringArrayHashMap(MediaType),
+    content: std.array_hash_map.String(MediaType),
 };
 
 pub const Components = struct {
-    schemas: std.StringArrayHashMap(Schema),
+    schemas: std.array_hash_map.String(Schema),
 };
 
 pub const Schema = union(enum) {
@@ -94,7 +94,7 @@ pub const Schema = union(enum) {
 
 pub const SchemaObject = struct {
     type: ?[]const u8 = null,
-    properties: ?std.StringArrayHashMap(Schema) = null,
+    properties: ?std.array_hash_map.String(Schema) = null,
     required: []const []const u8 = &.{},
     items: ?Schema = null,
     oneOf: []Schema = &.{},
